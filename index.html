@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Pulse: Disaster Response System</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; margin: 0; background: #f0f2f5; }
+        header { background: #1a237e; color: white; padding: 1rem; text-align: center; }
+        .container { display: grid; grid-template-columns: 1fr 350px; gap: 20px; padding: 20px; max-width: 1400px; margin: auto; }
+        
+        #map { height: 500px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        
+        .panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .ai-status { background: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 5px solid #4caf50; margin-bottom: 20px; }
+        
+        .btn-ai { background: #d32f2f; color: white; width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; margin-bottom: 10px; }
+        .btn-ai:hover { background: #b71c1c; }
+
+        #instructions-card { display: none; background: #fff5f5; border: 2px solid #d32f2f; margin-top: 20px; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(211, 47, 47, 0); } 100% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0); } }
+
+        .shelter-list { font-size: 14px; margin-top: 10px; }
+        .shelter-item { padding: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+        
+        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🤖 AI-PULSE DISASTER SYSTEM</h1>
+    <p>Automated Detection & Emergency Routing</p>
+</header>
+
+<div class="container">
+    <div>
+        <div id="map"></div>
+        <div class="panel" style="margin-top:20px;">
+            <h3>📊 Live Seismic Data (AI Monitoring)</h3>
+            <canvas id="seismicChart" style="width:100%; height:100px; background:#eee; border-radius:8px;"></canvas>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="panel">
+            <div class="ai-status">
+                <strong>AI Status:</strong> <span id="status-text">Monitoring Data...</span>
+            </div>
+            <button class="btn-ai" onclick="simulateAIDetection()">RUN AI EARTHQUAKE TEST</button>
+            <p style="font-size: 12px; color: #666; text-align: center;">Click to simulate AI detecting an Earthquake via sensor patterns.</p>
+        </div>
+
+        <div id="instructions-card" class="panel">
+            <h3 style="color:#d32f2f; margin-top:0;">🚨 AI ACTION PLAN</h3>
+            <p><b>DETECTED:</b> <span id="detected-type">Earthquake</span></p>
+            <p><b>WHAT TO DO:</b> <span id="action-text">Drop, Cover, and Hold on! Move away from windows.</span></p>
+            <hr>
+            <p><b>NEAREST SAFE ZONE:</b><br><strong id="safe-zone-name">Calculating...</strong></p>
+            <button onclick="window.location.reload()" style="width:100%; padding:8px;">Dismiss Alert</button>
+        </div>
+
+        <div class="panel" style="margin-top:20px;">
+            <h3>📍 Safe Shelters</h3>
+            <div class="shelter-list" id="shelter-list-ui">
+                </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignal.js" async=""></script>
+
+<script>
+    // --- 1. CONFIGURATION ---
+    const SUPABASE_URL = 'https://mltciqawrvxljrhaagsy.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1sdGNpcWF3cnZ4bGpyaGFhZ3N5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Njc3NTgsImV4cCI6MjA4NzE0Mzc1OH0.2s_3NZQzA7sqtwU4LJ7NYwzR0uTjoqHey2TPGaWn4QU';
+    const ONESIGNAL_ID = '8cd45b5c-4368-403c-9caf-ab2c7ed4749c';
+
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // OneSignal Init
+    window.OneSignal = window.OneSignal || [];
+    OneSignal.push(function() {
+        OneSignal.init({ appId: ONESIGNAL_ID });
+    });
+
+    // --- 2. MAP & DATA ---
+    var map = L.map('map').setView([14.5995, 120.9842], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    const shelters = [
+        { name: "City Stadium (Evacuation Center)", lat: 14.605, lng: 120.989, capacity: "2000" },
+        { name: "Grand Plaza Open Field", lat: 14.588, lng: 120.975, capacity: "5000" }
+    ];
+
+    // Show Shelters on Map
+    shelters.forEach(s => {
+        L.marker([s.lat, s.lng], { icon: L.icon({ iconUrl: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png' }) })
+            .addTo(map).bindPopup(`<b>${s.name}</b><br>Capacity: ${s.capacity}`);
+        
+        document.getElementById('shelter-list-ui').innerHTML += `
+            <div class="shelter-item"><span>${s.name}</span> <strong>OPEN</strong></div>
+        `;
+    });
+
+    // --- 3. AI DETECTION LOGIC ---
+    async function simulateAIDetection() {
+        document.getElementById('status-text').innerText = "Analyzing Seismic Waveforms...";
+        document.getElementById('status-text').style.color = "orange";
+
+        // Wait 2 seconds (simulating AI processing)
+        setTimeout(async () => {
+            const earthquakeData = { type: "Earthquake", lat: 14.599, lng: 120.984, intensity: "6.2" };
+            
+            // 1. Alert the User UI
+            document.getElementById('status-text').innerText = "CRITICAL: DISASTER DETECTED";
+            document.getElementById('status-text').style.color = "red";
+            document.getElementById('instructions-card').style.display = "block";
+            document.getElementById('safe-zone-name').innerText = shelters[1].name;
+
+            // 2. Add Red Zone to Map
+            L.circle([earthquakeData.lat, earthquakeData.lng], {
+                color: 'red', fillColor: '#f03', fillOpacity: 0.5, radius: 2000
+            }).addTo(map).bindPopup("<b>AI DETECTED: EARTHQUAKE EPICENTER</b>").openPopup();
+
+            // 3. Push to Supabase (Real-time storage)
+            await supabase.from('alerts').insert([{ 
+                disaster_type: earthquakeData.type, 
+                location_name: "Detected via AI Sensor Network",
+                lat: earthquakeData.lat, 
+                lng: earthquakeData.lng 
+            }]);
+
+            // 4. Trigger Amber Alert (Simulated browser notification)
+            alert("🚨 AMBER ALERT: Earthquake detected! Head to " + shelters[1].name);
+
+        }, 2000);
+    }
+
+    // --- 4. REAL-TIME LISTENER ---
+    supabase.channel('public:alerts')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'alerts' }, payload => {
+            console.log("Remote Alert Received!", payload.new);
+            // This ensures other users see the alert too
+        }).subscribe();
+
+</script>
+</body>
+</html>
