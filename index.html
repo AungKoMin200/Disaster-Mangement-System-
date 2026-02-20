@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>QuakeAlert Command Center</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        #map { height: 600px; width: 100%; }
+
+        .alert-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        button {
+            background: red;
+            color: white;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="alert-panel">
+    <h3>Admin Panel</h3>
+    <input type="text" id="disasterType" placeholder="Disaster Type">
+    <button onclick="triggerEmergency()">🚨 SEND ALERT</button>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+// Initialize map (Yangon)
+var map = L.map('map').setView([16.8661, 96.1951], 12);
+
+// Load map tiles
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+// Dummy shelter locations
+var shelters = [
+    { name: "Yangon School Shelter", lat: 16.870, lng: 96.210, capacity: 200 },
+    { name: "City Hall Shelter", lat: 16.774, lng: 96.158, capacity: 150 },
+    { name: "Hospital Safe Zone", lat: 16.799, lng: 96.149, capacity: 300 }
+];
+
+// Add markers
+shelters.forEach(s => {
+    L.marker([s.lat, s.lng]).addTo(map)
+        .bindPopup("<b>" + s.name + "</b><br>Capacity: " + s.capacity);
+});
+
+// Alert button
+function triggerEmergency() {
+    const type = document.getElementById("disasterType").value;
+    alert("🚨 ALERT SENT: " + type);
+}
+
+</script>
+
+</body>
+</html>
